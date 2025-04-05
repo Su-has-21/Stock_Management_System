@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ProductForm from './components/ProductForm';
 import ProductList from './components/ProductList';
 import StockOverview from './components/StockOverview';
+import SalesDashboard from './components/SalesDashboard';
 import './App.css';
 
 function App() {
@@ -32,6 +33,16 @@ function App() {
                                     Stock Overview
                                 </button>
                                 <button
+                                    onClick={() => setActiveTab('dashboard')}
+                                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                                        activeTab === 'dashboard'
+                                            ? 'border-indigo-500 text-gray-900'
+                                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                                    }`}
+                                >
+                                    Sales Dashboard
+                                </button>
+                                <button
                                     onClick={() => setActiveTab('products')}
                                     className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                                         activeTab === 'products'
@@ -50,6 +61,8 @@ function App() {
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 {activeTab === 'stock' ? (
                     <StockOverview />
+                ) : activeTab === 'dashboard' ? (
+                    <SalesDashboard />
                 ) : (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">

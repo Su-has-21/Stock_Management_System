@@ -1,48 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import ProductForm from './ProductForm';
 import ProductList from './ProductList';
+import { Button, Card } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 
 const ProductManagement = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const productListRef = useRef();
 
     const handleEdit = (product) => {
         setEditingProduct(product);
         setShowForm(true);
     };
 
+    const handleSave = () => {
+        setShowForm(false);
+        setEditingProduct(null);
+        // Trigger product list refresh
+        if (productListRef.current) {
+            productListRef.current.fetchProducts();
+        }
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-semibold text-gray-900">Product Management</h1>
-                <button
-                    onClick={() => {
-                        setEditingProduct(null);
-                        setShowForm(true);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                >
-                    Add Product
-                </button>
-            </div>
-
-            {showForm && (
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <ProductForm
-                        product={editingProduct}
-                        onSave={() => {
-                            setShowForm(false);
+        <div style={{ padding: '24px' }}>
+            <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h1 style={{ margin: 0, fontSize: '24px' }}>Product Management</h1>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
                             setEditingProduct(null);
+                            setShowForm(true);
                         }}
-                        onCancel={() => {
-                            setShowForm(false);
-                            setEditingProduct(null);
-                        }}
-                    />
+                    >
+                        Add Product
+                    </Button>
                 </div>
-            )}
 
-            <ProductList onEdit={handleEdit} />
+                {showForm && (
+                    <Card style={{ marginBottom: '16px' }}>
+                        <ProductForm
+                            product={editingProduct}
+                            onSave={handleSave}
+                            onCancel={() => {
+                                setShowForm(false);
+                                setEditingProduct(null);
+                            }}
+                        />
+                    </Card>
+                )}
+
+                <ProductList 
+                    ref={productListRef}
+                    onEdit={handleEdit}
+                />
+            </Card>
         </div>
     );
 };

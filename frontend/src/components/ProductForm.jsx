@@ -1,150 +1,149 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../utils/axiosConfig';
+import { Form, Input, InputNumber, Button, Card, message, Space } from 'antd';
+import { SaveOutlined, CloseOutlined } from '@ant-design/icons';
+
+const { TextArea } = Input;
 
 const ProductForm = ({ product, onSave, onCancel }) => {
-    const [formData, setFormData] = useState({
-        name: '',
-        category: '',
-        price: '',
-        quantity: '',
-        description: ''
-    });
-    const [error, setError] = useState('');
+    const [form] = Form.useForm();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (product) {
-            setFormData({
+            form.setFieldsValue({
                 name: product.name,
                 category: product.category,
                 price: product.price,
                 quantity: product.quantity,
                 description: product.description || ''
             });
+        } else {
+            form.resetFields();
         }
-    }, [product]);
+    }, [product, form]);
+    
+    useEffect(() => {
+       
+    }, [ ]);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-        // Clear error when user starts typing
-        if (error) setError('');
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
+    const handleSubmit = async (values) => {
         setIsSubmitting(true);
-
-        // Validate price
-        const price = parseFloat(formData.price);
-        if (price > 99999999.99) {
-            setError('Price cannot exceed 99,999,999.99');
-            setIsSubmitting(false);
-            return;
-        }
-
         try {
             if (product) {
-                await axiosInstance.put(`/products/${product.id}`, formData);
+                await axiosInstance.put(`/api/products/${product.id}`, values);
+                message.success('Product updated successfully');
             } else {
-                await axiosInstance.post('/products', formData);
+                await axiosInstance.post('/api/products', values);
+                message.success('Product created successfully');
             }
+            form.resetFields();
             onSave();
         } catch (error) {
             console.error('Error saving product:', error);
-            setError(error.response?.data?.message || 'An error occurred while saving the product');
+            message.error(error.response?.data?.message || 'An error occurred while saving the product');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                    {error}
-                </div>
-            )}
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <input
-                    type="text"
+        <Card title={product ? 'Edit Product' : 'Add New Product'}>
+            <Form
+                form={form}
+                layout="vertical"
+                onFinish={handleSubmit}
+                initialValues={{
+                    name: '',
+                    category: '',
+                    price: '',
+                    quantity: '',
+                    description: ''
+                }}
+            >
+                <Form.Item
                     name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Category</label>
-                <input
-                    type="text"
+                    label="Product Name"
+                    rules={[
+                        { required: true, message: 'Please enter the product name' },
+                        { max: 100, message: 'Name cannot be longer than 100 characters' }
+                    ]}
+                >
+                    <Input placeholder="Enter product name" />
+                </Form.Item>
+
+                <Form.Item
                     name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Price</label>
-                <input
-                    type="number"
+                    label="Category"
+                    rules={[
+                        { required: true, message: 'Please enter the category' },
+                        { max: 50, message: 'Category cannot be longer than 50 characters' }
+                    ]}
+                >
+                    <Input placeholder="Enter product category" />
+                </Form.Item>
+
+                <Form.Item
                     name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    required
-                    step="0.01"
-                    min="0"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                <input
-                    type="number"
+                    label="Price"
+                    rules={[
+                        { required: true, message: 'Please enter the price' },
+                        { type: 'number', min: 0, message: 'Price must be greater than or equal to 0' },
+                        { type: 'number', max: 99999999.99, message: 'Price cannot exceed 99,999,999.99' }
+                    ]}
+                >
+                    <InputNumber
+                        style={{ width: '100%' }}
+                        placeholder="Enter price"
+                        step="0.01"
+                        prefix="Rs"
+                    />
+                </Form.Item>
+
+                <Form.Item
                     name="quantity"
-                    value={formData.quantity}
-                    onChange={handleChange}
-                    required
-                    min="0"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea
+                    label="Quantity"
+                    rules={[
+                        { required: true, message: 'Please enter the quantity' },
+                        { type: 'number', min: 0, message: 'Quantity must be greater than or equal to 0' }
+                    ]}
+                >
+                    <InputNumber
+                        style={{ width: '100%' }}
+                        placeholder="Enter quantity"
+                    />
+                </Form.Item>
+
+                <Form.Item
                     name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-            </div>
-            <div className="flex justify-end space-x-3">
-                <button
-                    type="button"
-                    onClick={onCancel}
-                    disabled={isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    label="Description"
                 >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md ${
-                        isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'
-                    }`}
-                >
-                    {isSubmitting ? 'Saving...' : 'Save'}
-                </button>
-            </div>
-        </form>
+                    <TextArea
+                        rows={4}
+                        placeholder="Enter product description (optional)"
+                    />
+                </Form.Item>
+
+                <Form.Item>
+                    <Space>
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            loading={isSubmitting}
+                            icon={<SaveOutlined />}
+                        >
+                            {isSubmitting ? 'Saving...' : 'Save'}
+                        </Button>
+                        <Button
+                            onClick={onCancel}
+                            icon={<CloseOutlined />}
+                        >
+                            Cancel
+                        </Button>
+                    </Space>
+                </Form.Item>
+            </Form>
+        </Card>
     );
 };
 

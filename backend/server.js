@@ -9,7 +9,17 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Load environment variables
 require('dotenv').config();
+
+// Debug logging for environment variables
+console.log('Environment Variables:');
+console.log('PORT:', process.env.PORT);
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not Set');
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_PORT:', process.env.DB_PORT);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? 'Set' : 'Not Set');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,8 +44,14 @@ const upload = multer({
     }
 });
 
+// Configure CORS
+app.use(cors({
+    origin: 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static('uploads'));
@@ -50,12 +66,10 @@ app.get('/sample_stock.csv', (req, res) => {
     res.sendFile(path.join(__dirname, 'sample_stock.csv'));
 });
 
-// Public routes
+// Routes
 app.use('/api/auth', authRoutes);
-
-// Protected routes
 app.use('/api/products', auth, productRoutes);
-app.use('/api/stock', auth, stockRoutes);
+app.use('/api/stock', stockRoutes); // Temporarily removed auth middleware
 
 // Error handling middleware
 app.use((err, req, res, next) => {

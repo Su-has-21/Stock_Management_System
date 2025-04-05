@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Input, Button, Modal, message } from 'antd';
 
 const StockOverview = () => {
     const [stock, setStock] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [sellModalVisible, setSellModalVisible] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [sellQuantity, setSellQuantity] = useState(1);
 
     useEffect(() => {
         fetchStock();
@@ -22,16 +26,35 @@ const StockOverview = () => {
         }
     };
 
-    const handleSell = async (productId, quantity) => {
+    const handleSellClick = (product) => {
+        setSelectedProduct(product);
+        setSellQuantity(1);
+        setSellModalVisible(true);
+    };
+
+    const handleSell = async () => {
+        if (!selectedProduct || sellQuantity <= 0) {
+            message.error('Invalid quantity');
+            return;
+        }
+
+        if (sellQuantity > selectedProduct.available_stock) {
+            message.error('Insufficient stock');
+            return;
+        }
+
         try {
-            await axios.post('http://localhost:5000/api/stock/sell', {
-                product_id: productId,
-                quantity: quantity
+            const response = await axios.post('http://localhost:5000/api/stock/sell', {
+                product_id: selectedProduct.id,
+                quantity: sellQuantity
             });
+
+            message.success('Sale recorded successfully');
+            setSellModalVisible(false);
             fetchStock();
         } catch (error) {
             console.error('Error recording sale:', error);
-            setError('Failed to record sale');
+            message.error(error.response?.data?.message || 'Failed to record sale');
         }
     };
 
@@ -85,7 +108,7 @@ const StockOverview = () => {
                                 <td className="px-6 py-4 whitespace-nowrap">Rs {Number(item.revenue || 0).toFixed(2)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <button
-                                        onClick={() => handleSell(item.id, 1)}
+                                        onClick={() => handleSellClick(item)}
                                         disabled={item.available_stock <= 0}
                                         className={`px-3 py-1 text-sm rounded ${
                                             item.available_stock <= 0
@@ -101,6 +124,40 @@ const StockOverview = () => {
                     </tbody>
                 </table>
             </div>
+
+            <Modal
+                title="Sell Product"
+                visible={sellModalVisible}
+                onOk={handleSell}
+                onCancel={() => setSellModalVisible(false)}
+                okText="Sell"
+                cancelText="Cancel"
+            >
+                {selectedProduct && (
+                    <div className="space-y-4">
+                        <div>
+                            <p className="font-medium">Product: {selectedProduct.name}</p>
+                            <p>Available Stock: {selectedProduct.available_stock}</p>
+                            <p>Price: Rs {selectedProduct.price}</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Quantity</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                max={selectedProduct.available_stock}
+                                value={sellQuantity}
+                                onChange={(e) => setSellQuantity(parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                        <div>
+                            <p className="font-medium">
+                                Total: Rs {(selectedProduct.price * sellQuantity).toFixed(2)}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };

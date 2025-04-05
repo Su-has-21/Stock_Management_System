@@ -1,102 +1,71 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance from '../utils/axiosConfig';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Typography,
-    Box,
-    CircularProgress,
-    Alert,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel,
-    Button,
-    TextField,
-    Grid
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import { useNavigate } from 'react-router-dom';
-
-const StyledTableRow = styled(TableRow)(({ theme }) => ({
-    '&:nth-of-type(odd)': {
-        backgroundColor: theme.palette.action.hover,
-    },
-}));
+import axios from '../utils/axiosConfig';
+import { Input, Button, Modal, message, Table, Card, Row, Col, Statistic } from 'antd';
+import { ShoppingCartOutlined, DollarOutlined, AppstoreOutlined } from '@ant-design/icons';
 
 const StockOverview = () => {
-    const navigate = useNavigate();
     const [stock, setStock] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [category, setCategory] = useState('');
-    const [sortBy, setSortBy] = useState('');
-    const [sortOrder, setSortOrder] = useState('ASC');
-    const [selectedFile, setSelectedFile] = useState(null);
-    const [importStatus, setImportStatus] = useState(null);
-    const [categories, setCategories] = useState([]);
+    const [sellModalVisible, setSellModalVisible] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [sellQuantity, setSellQuantity] = useState(1);
+    const [sortOrder, setSortOrder] = useState('ascend');
+    const [sortField, setSortField] = useState(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/login');
-            return;
-        }
         fetchStock();
-        fetchCategories();
-    }, [category, sortBy, sortOrder]);
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/login');
-        }
-    }, [navigate]);
+    }, []);
 
     const fetchStock = async () => {
         try {
-            setLoading(true);
-            const params = new URLSearchParams();
-            if (category) params.append('category', category);
-            if (sortBy) params.append('sortBy', sortBy);
-            if (sortOrder) params.append('sortOrder', sortOrder);
-
-            const response = await axiosInstance.get(`/stock?${params.toString()}`);
+            const response = await axios.get('/api/stock');
             setStock(response.data);
-            setError(null);
-        } catch (err) {
-            if (err.response?.status === 401) {
-                localStorage.removeItem('token');
-                navigate('/login');
-            } else {
-                setError(err.response?.data?.message || 'Error fetching stock data');
-                console.error('Error fetching stock:', err);
-            }
-        } finally {
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching stock:', error);
+            message.error('Failed to fetch stock data');
             setLoading(false);
         }
     };
 
-    const fetchCategories = async () => {
+    const handleSellClick = (product) => {
+        setSelectedProduct(product);
+        setSellQuantity(1);
+        setSellModalVisible(true);
+    };
+
+    const handleSell = async () => {
+        if (!selectedProduct || sellQuantity <= 0) {
+            message.error('Invalid quantity');
+            return;
+        }
+
+        if (sellQuantity > selectedProduct.available_stock) {
+            message.error('Insufficient stock');
+            return;
+        }
+
         try {
-            const response = await axiosInstance.get('/products/categories');
-            setCategories(response.data);
-        } catch (err) {
-            console.error('Error fetching categories:', err);
+            await axios.post('/api/stock/sell', {
+                product_id: selectedProduct.id,
+                quantity: sellQuantity
+            });
+
+            message.success('Sale recorded successfully');
+            setSellModalVisible(false);
+            fetchStock();
+        } catch (error) {
+            console.error('Error recording sale:', error);
+            message.error(error.response?.data?.message || 'Failed to record sale');
         }
     };
 
     const handleExport = async () => {
         try {
-            const response = await axiosInstance.get('/stock/export', {
+            const response = await axios.get('/api/stock/export', {
                 responseType: 'blob'
             });
-            
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -104,190 +73,154 @@ const StockOverview = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-        } catch (err) {
-            if (err.response?.status === 401) {
-                localStorage.removeItem('token');
-                navigate('/login');
-            } else {
-                setError(err.response?.data?.message || 'Error exporting stock data');
-                console.error('Error exporting stock:', err);
-            }
+        } catch (error) {
+            message.error('Failed to export stock data');
         }
     };
 
-    const handleImport = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setSelectedFile(file);
-        const formData = new FormData();
-        formData.append('csv', file);
-
-        try {
-            setImportStatus('Importing...');
-            await axiosInstance.post('/stock/import', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
-            setImportStatus('Import successful!');
-            fetchStock();
-        } catch (err) {
-            if (err.response?.status === 401) {
-                localStorage.removeItem('token');
-                navigate('/login');
-            } else {
-                setImportStatus('Import failed');
-                setError(err.response?.data?.message || 'Error importing stock data');
-                console.error('Error importing stock:', err);
-            }
+    const columns = [
+        {
+            title: 'Product',
+            dataIndex: 'name',
+            key: 'name',
+            sorter: true,
+        },
+        {
+            title: 'Category',
+            dataIndex: 'category',
+            key: 'category',
+            sorter: true,
+        },
+        {
+            title: 'Available Stock',
+            dataIndex: 'available_stock',
+            key: 'available_stock',
+            sorter: true,
+        },
+        {
+            title: 'Items Sold',
+            dataIndex: 'items_sold',
+            key: 'items_sold',
+            sorter: true,
+        },
+        {
+            title: 'Revenue',
+            dataIndex: 'revenue',
+            key: 'revenue',
+            sorter: true,
+            render: (value) => `Rs ${Number(value || 0).toFixed(2)}`
+        },
+        {
+            title: 'Actions',
+            key: 'actions',
+            render: (_, record) => (
+                <Button
+                    type="primary"
+                    onClick={() => handleSellClick(record)}
+                    disabled={record.available_stock <= 0}
+                >
+                    Sell
+                </Button>
+            )
         }
-    };
+    ];
 
-    const handleDownloadTemplate = () => {
-        window.open('http://localhost:5000/sample_stock.csv');
-    };
+    const totalRevenue = stock.reduce((sum, item) => sum + (Number(item.revenue) || 0), 0);
+    const totalItemsSold = stock.reduce((sum, item) => sum + (Number(item.items_sold) || 0), 0);
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-                <CircularProgress />
-            </Box>
-        );
-    }
+    const handleTableChange = (pagination, filters, sorter) => {
+        setSortField(sorter.field);
+        setSortOrder(sorter.order);
+    };
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Stock Overview
-            </Typography>
+        <div style={{ padding: '24px' }}>
+            <Row gutter={[16, 16]}>
+                <Col span={8}>
+                    <Card>
+                        <Statistic
+                            title="Total Products"
+                            value={stock.length}
+                            prefix={<AppstoreOutlined />}
+                        />
+                    </Card>
+                </Col>
+                <Col span={8}>
+                    <Card>
+                        <Statistic
+                            title="Total Items Sold"
+                            value={totalItemsSold}
+                            prefix={<ShoppingCartOutlined />}
+                        />
+                    </Card>
+                </Col>
+                <Col span={8}>
+                    <Card>
+                        <Statistic
+                            title="Total Revenue"
+                            value={totalRevenue}
+                            precision={2}
+                            prefix={<DollarOutlined />}
+                            suffix="Rs"
+                        />
+                    </Card>
+                </Col>
+            </Row>
 
-            {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {error}
-                </Alert>
-            )}
+            <Row style={{ marginTop: '16px', marginBottom: '16px' }}>
+                <Col>
+                    <Button type="primary" onClick={handleExport} style={{ marginRight: '8px' }}>
+                        Export CSV
+                    </Button>
+                    <Button type="default" onClick={() => message.info('Import functionality coming soon')}>
+                        Import CSV
+                    </Button>
+                </Col>
+            </Row>
 
-            {importStatus && (
-                <Alert severity={importStatus.includes('success') ? 'success' : 'error'} sx={{ mb: 2 }}>
-                    {importStatus}
-                </Alert>
-            )}
+            <Table
+                columns={columns}
+                dataSource={stock}
+                rowKey="id"
+                loading={loading}
+                onChange={handleTableChange}
+                pagination={{ pageSize: 10 }}
+            />
 
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                    <FormControl fullWidth>
-                        <InputLabel>Category</InputLabel>
-                        <Select
-                            value={category}
-                            label="Category"
-                            onChange={(e) => setCategory(e.target.value)}
-                        >
-                            <MenuItem value="">All Categories</MenuItem>
-                            {categories.map((cat) => (
-                                <MenuItem key={cat} value={cat}>
-                                    {cat}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                    <FormControl fullWidth>
-                        <InputLabel>Sort By</InputLabel>
-                        <Select
-                            value={sortBy}
-                            label="Sort By"
-                            onChange={(e) => setSortBy(e.target.value)}
-                        >
-                            <MenuItem value="">Default</MenuItem>
-                            <MenuItem value="name">Name</MenuItem>
-                            <MenuItem value="category">Category</MenuItem>
-                            <MenuItem value="price">Price</MenuItem>
-                            <MenuItem value="available_stock">Available Stock</MenuItem>
-                            <MenuItem value="items_sold">Items Sold</MenuItem>
-                            <MenuItem value="revenue">Revenue</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                    <FormControl fullWidth>
-                        <InputLabel>Sort Order</InputLabel>
-                        <Select
-                            value={sortOrder}
-                            label="Sort Order"
-                            onChange={(e) => setSortOrder(e.target.value)}
-                        >
-                            <MenuItem value="ASC">Ascending</MenuItem>
-                            <MenuItem value="DESC">Descending</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleExport}
-                            fullWidth
-                        >
-                            Export CSV
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            component="label"
-                            fullWidth
-                        >
-                            Import CSV
-                            <input
-                                type="file"
-                                hidden
-                                accept=".csv"
-                                onChange={handleImport}
+            <Modal
+                title="Sell Product"
+                open={sellModalVisible}
+                onOk={handleSell}
+                onCancel={() => setSellModalVisible(false)}
+                okText="Sell"
+                cancelText="Cancel"
+            >
+                {selectedProduct && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                            <p style={{ fontWeight: 500 }}>Product: {selectedProduct.name}</p>
+                            <p>Available Stock: {selectedProduct.available_stock}</p>
+                            <p>Price: Rs {selectedProduct.price}</p>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '8px' }}>Quantity</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                max={selectedProduct.available_stock}
+                                value={sellQuantity}
+                                onChange={(e) => setSellQuantity(parseInt(e.target.value) || 0)}
                             />
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            onClick={handleDownloadTemplate}
-                            fullWidth
-                        >
-                            Template
-                        </Button>
-                    </Box>
-                </Grid>
-            </Grid>
-
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Category</TableCell>
-                            <TableCell>Price</TableCell>
-                            <TableCell>Available Stock</TableCell>
-                            <TableCell>Items Sold</TableCell>
-                            <TableCell>Revenue</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {stock.map((item) => (
-                            <StyledTableRow key={item.id}>
-                                <TableCell>{item.name}</TableCell>
-                                <TableCell>{item.category}</TableCell>
-                                <TableCell>${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}</TableCell>
-                                <TableCell>{item.available_stock}</TableCell>
-                                <TableCell>{item.items_sold}</TableCell>
-                                <TableCell>${typeof item.revenue === 'number' ? item.revenue.toFixed(2) : '0.00'}</TableCell>
-                            </StyledTableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Box>
+                        </div>
+                        <div>
+                            <p style={{ fontWeight: 500 }}>
+                                Total: Rs {(selectedProduct.price * sellQuantity).toFixed(2)}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+        </div>
     );
 };
 

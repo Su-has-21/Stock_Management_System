@@ -186,11 +186,30 @@ router.post('/sell', async (req, res) => {
     try {
         const { product_id, quantity } = req.body;
         
+        if (!product_id || !quantity || quantity <= 0) {
+            return res.status(400).json({ message: 'Invalid product ID or quantity' });
+        }
+
         // Start transaction
         const connection = await pool.getConnection();
         await connection.beginTransaction();
         
         try {
+            // Check if product exists and has sufficient stock
+            const [products] = await connection.query(
+                'SELECT * FROM products WHERE id = ?',
+                [product_id]
+            );
+
+            if (products.length === 0) {
+                throw new Error('Product not found');
+            }
+
+            const product = products[0];
+            if (product.quantity < quantity) {
+                throw new Error('Insufficient stock');
+            }
+            
             // Update product quantity
             await connection.query(
                 'UPDATE products SET quantity = quantity - ? WHERE id = ?',
@@ -204,7 +223,16 @@ router.post('/sell', async (req, res) => {
             );
             
             await connection.commit();
-            res.json({ message: 'Sale recorded successfully' });
+            res.json({ 
+                message: 'Sale recorded successfully',
+                product: {
+                    id: product.id,
+                    name: product.name,
+                    quantity_sold: quantity,
+                    remaining_stock: product.quantity - quantity,
+                    total_price: product.price * quantity
+                }
+            });
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -215,8 +243,62 @@ router.post('/sell', async (req, res) => {
         console.error('Error recording sale:', error);
         res.status(500).json({ 
             message: 'Error recording sale', 
-            error: error.message,
-            stack: error.stack 
+            error: error.message
+        });
+    }
+});
+
+// Get sales dashboard data
+router.get('/dashboard', async (req, res) => {
+    try {
+        const [dashboardData] = await pool.query(`
+            SELECT 
+                COUNT(DISTINCT t.id) as total_transactions,
+                SUM(t.quantity) as total_items_sold,
+                SUM(t.quantity * p.price) as total_revenue,
+                COUNT(DISTINCT p.id) as total_products,
+                SUM(p.quantity) as total_available_stock
+            FROM transactions t
+            JOIN products p ON t.product_id = p.id
+        `);
+
+        const [topProducts] = await pool.query(`
+            SELECT 
+                p.id,
+                p.name,
+                p.category,
+                SUM(t.quantity) as items_sold,
+                SUM(t.quantity * p.price) as revenue
+            FROM transactions t
+            JOIN products p ON t.product_id = p.id
+            GROUP BY p.id
+            ORDER BY items_sold DESC
+            LIMIT 5
+        `);
+
+        const [recentSales] = await pool.query(`
+            SELECT 
+                t.id,
+                p.name,
+                t.quantity,
+                t.quantity * p.price as total_price,
+                t.date
+            FROM transactions t
+            JOIN products p ON t.product_id = p.id
+            ORDER BY t.date DESC
+            LIMIT 10
+        `);
+
+        res.json({
+            summary: dashboardData[0],
+            topProducts,
+            recentSales
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        res.status(500).json({ 
+            message: 'Error fetching dashboard data', 
+            error: error.message
         });
     }
 });
